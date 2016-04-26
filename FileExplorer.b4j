@@ -1,0 +1,231 @@
+﻿Version=4.2
+AppType=JavaFX
+NumberOfModules=1
+Module1=FileExplorer
+Build1=Default,b4j.example
+NumberOfFiles=13
+File1=delete.png
+File2=document_a4_forward.png
+File3=document_a4_remove.png
+File4=folder.png
+File5=folder_classic_add.png
+File6=folder_classic_edit.png
+File7=folder_magnify.png
+File8=folder_up.png
+File9=link.png
+File10=mainform.bjl
+File11=mycomputer.bjl
+File12=selecteditems.bjl
+File13=unknown_filetype.png
+NumberOfLibraries=4
+Library1=jcore
+Library2=jfx
+Library3=javaobject
+Library4=jrldialogs8
+@EndOfDesignText@
+#Region  Project Attributes 
+	#MainFormWidth: 800
+	#MainFormHeight: 600
+	'This project needs these extra libraries: jRLDialogs8, JavaObject
+#End Region
+
+Sub Process_Globals
+	Private fx As JFX
+	Private MainForm As Form
+	Private explorer As FileExplorer
+	Private lvSelected As ListView
+	Private lvDevice As ListView
+	Private lblSelected As Label
+	Private intSelectedIndex As Int
+	Private mapSelectedURI As Map
+	Private dialogue8 As Dialogs8
+	Private splitMain As SplitPane
+	Private comboFolder As ComboBox
+	Private lblCurrentDirectoryName As Label
+End Sub
+
+Sub AppStart (Form1 As Form, Args() As String)
+	MainForm = Form1
+	MainForm.SetFormStyle("UNIFIED")
+	MainForm.RootPane.LoadLayout("mainform") 'Load the layout file.
+	MainForm.Icon = fx.LoadImage(File.DirAssets, "folder_magnify.png")
+	splitMain.LoadLayout("mycomputer") 
+	splitMain.LoadLayout("selecteditems")
+	'limit the widths of the two side layouts
+	splitMain.SetSizeLimits(0, 0, 0)
+	splitMain.SetSizeLimits(1, 0, 0)
+	MainForm.Show
+	Dim jo As JavaObject
+    Dim strInitialDirectory As String =  jo.InitializeStatic("javax.swing.filechooser.FileSystemView").RunMethodJO("getFileSystemView", Null).RunMethodJO("getDefaultDirectory", Null).RunMethod("getAbsolutePath", Null)
+	comboFolder.Items.Add(strInitialDirectory)
+	comboFolder.SelectedIndex = 0
+	explorer.Initialize(Me, "file_explorer", lvDevice, strInitialDirectory)
+	explorer.LoadContents
+	intSelectedIndex = -1
+	mapSelectedURI.Initialize
+	dialogue8.Initialize
+End Sub
+
+Sub comboFolder_SelectedIndexChanged(Index As Int, Value As Object)
+	If Index > -1 And Value <> "" Then
+		If File.IsDirectory(comboFolder.Items.Get(Index), "") = True Then
+			explorer.ReloadContents(comboFolder.Items.Get(Index))
+			lblCurrentDirectoryName.Text = "Exploring " & File.GetName(comboFolder.Items.Get(Index))
+		End If
+	End If
+End Sub
+
+'Until there is a way for the class to listen to the Main module, you need to pass the list view mouse clicked event to the class.
+Sub lvDevice_MouseClicked (EventData As MouseEvent)
+	explorer.MouseClicked(EventData)
+End Sub
+
+'Until there is a way for the class to listen to the Main module, you need to pass the list view selected index changed event to the class.
+Sub lvDevice_SelectedIndexChanged(Index As Int)
+	explorer.SelectedIndex(Index)
+End Sub
+
+Sub cmenuAddToSelectedList_Action
+	file_explorer_DoubleClick(explorer.SelectedItemURI(False))
+End Sub
+
+Sub cmenuAddFolder_Action
+	Dim strNewFolderName As String = dialogue8.TextInputDialog("New Folder", "Create New Folder", "Enter folder name", "")
+	If strNewFolderName <> "" Then
+		If strNewFolderName.EqualsIgnoreCase("Null") = False Then
+			If File.IsDirectory(explorer.CurrentDirectory, "") = True Then
+				File.MakeDir(explorer.CurrentDirectory, strNewFolderName)
+				explorer.ReloadContents("")
+			End If
+		End If
+	End If
+End Sub
+
+Sub cmenuRenameFolder_Action
+	Log(explorer.SelectedItemType(False))
+	If explorer.SelectedItemType(False) = "directory" Then
+		Dim strNewFolderName As String = dialogue8.TextInputDialog("Edit Folder", "Rename Folder", "Enter new folder name", explorer.SelectedItemValue(False))
+		If strNewFolderName <> "" Then
+			If strNewFolderName.EqualsIgnoreCase("Null") = False Then
+				If File.IsDirectory(explorer.CurrentDirectory, "") = True Then
+					explorer.RenameFolder(explorer.CurrentDirectory, explorer.SelectedItemValue(False), strNewFolderName)
+					explorer.ReloadContents("")
+				End If
+			End If
+		End If
+	Else
+		dialogue8.WarningDialog("Edit Folder", "Selection Error", "The selected item is not a folder.")
+	End If
+End Sub
+
+
+
+
+
+
+
+'This is the list view of the items moved over from My Computer view. This is the list you will be doing things with.
+Sub lvSelected_SelectedIndexChanged(Index As Int)
+	If Index > -1 Then
+		intSelectedIndex = Index
+	Else
+		intSelectedIndex = -1
+	End If
+End Sub
+
+Sub lvSelected_MouseClicked (EventData As MouseEvent)
+	If intSelectedIndex > -1 Then
+		If EventData.ClickCount = 2 Then
+		    lvSelected.Items.RemoveAt(intSelectedIndex)
+		End If
+	End If
+End Sub
+
+'This shows you how you use the map of anchor indexes to get the URI of the file added.
+Sub cmenuSelectedShowURI_Action
+	If intSelectedIndex > -1 Then
+    	lblSelected.Text = mapSelectedURI.Get(intSelectedIndex)
+	End If
+End Sub
+
+Sub cmenuSelectedRemove_Action
+	If intSelectedIndex > -1 Then
+		mapSelectedURI.Remove(intSelectedIndex)
+		lvSelected.Items.RemoveAt(intSelectedIndex)
+	End If
+End Sub
+
+
+
+
+
+
+
+'The FileExplorer class raises three events: MouseClick, DoubleClick, and SelectedIndexChanged. 
+'Yeah, they are kind of redundant but it makes getting actions and info from the class MUCH easier.
+Sub file_explorer_MouseClick(Uri As String)
+	If explorer.SelectedItemValue(False) <> "" Then
+		lblSelected.Text = "1Single-Click Selected: " & explorer.SelectedItemValue(False)
+	Else
+		lblSelected.Text = "No items selected. Did you change directories?"
+	End If
+End Sub
+
+Sub file_explorer_DoubleClick(Uri As String)
+	Log("dc uri: " & Uri)
+	If File.IsDirectory(Uri, "") = True Then
+		Dim a As AnchorPane
+		a.Initialize("DeviceAnchorPane")
+		Dim im As ImageView
+		im.Initialize("DeviceIcon")
+		im.SetImage(fx.LoadImage(File.DirAssets, "folder.png"))
+		a.AddNode(im, 0, 0, 16, 16)
+		Dim lblThis As Label
+		lblThis.Initialize("DeviceList")
+		lblThis.Text = File.GetName(Uri)
+		a.AddNode(lblThis, 18, 0, -1, -1)
+		lvSelected.Items.Add(a)
+		'Since displaying the name in the lvSelected doens't tell you the file URI, you need to store it in a map.
+		'See the subroutine cmenuSelectedShowURI_Action to see how the map is used to action the file
+		mapSelectedURI.Put(lvSelected.Items.IndexOf(a), Uri)
+	Else
+		Dim a As AnchorPane
+		a.Initialize("DeviceAnchorPane")
+		Dim im As ImageView
+		im.Initialize("")
+		im.SetImage(explorer.GetFileIcon(File.GetFileParent(Uri), File.GetName(Uri)))
+		a.AddNode(im, 0, 0, 16, 16)
+		Dim lblThis As Label
+		lblThis.Initialize("")
+		lblThis.Text = File.GetName(Uri)
+		a.AddNode(lblThis, 18, 0, -1, -1)
+		lvSelected.Items.Add(a)
+		'Since displaying the name in the lvSelected doens't tell you the file URI, you need to store it in a map.
+		'See the subroutine cmenuSelectedShowURI_Action to see how the map is used to action the file
+		mapSelectedURI.Put(lvSelected.Items.IndexOf(a), Uri)
+	End If
+End Sub
+
+Sub file_explorer_ChangeDirectory(Uri As String)
+	'As we want a drop down/combo box with folders we've looked at, we need to map the index of the list to a map object
+	Dim boolUriExists As Boolean = False
+	For i = 0 To comboFolder.Items.Size - 1
+		If comboFolder.Items.Get(i) = Uri Then
+			boolUriExists = True
+		End If
+	Next
+	If boolUriExists = False Then
+		comboFolder.Items.InsertAt(0, Uri)
+		comboFolder.SelectedIndex = 0
+	End If
+End Sub
+
+Sub file_explorer_SelectedIndexChanged(Index As Int)
+	If explorer.SelectedItemValue(True) <> "" Then
+		lblSelected.Text = "Double-Click Selected: " & Index & " is named " & explorer.SelectedItemValue(True)
+	Else if explorer.SelectedItemValue(False) <> "" Then
+		lblSelected.Text = "2Single-Click Selected: " & Index & " is named " & explorer.SelectedItemValue(False)
+	Else
+		lblSelected.Text = "No items selected. Did you change directories?"
+	End If
+End Sub
